@@ -2,7 +2,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-
+import 'dart:async';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -15,7 +15,84 @@ Future<void> main() async {
 
   cameras = await availableCameras();
 
-  runApp(CameraApp());
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  // This widget is the root of your application.
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Melodify',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+          primaryColor: Colors.black,
+          accentColor: Colors.cyan[600],
+          backgroundColor: Colors.black,
+          canvasColor: Colors.black,
+          textTheme: const TextTheme(
+
+          )
+      ),
+      home: Splash(),
+    );
+  }
+}
+
+
+
+class Splash extends StatefulWidget {
+  @override
+  _SplashState createState() => new _SplashState();
+}
+
+class _SplashState extends State<Splash> {
+
+  @override
+  void initState() {
+    super.initState();
+    new Future.delayed(
+        const Duration(seconds: 3),
+            () => Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => CameraApp()),
+        ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage("assets/app_icon.png"),
+              fit: BoxFit.cover,
+            ),
+          ),
+          child: Column(
+            // mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                  child: Image(image: AssetImage("assets/app_icon.png"))
+              ),
+              Container(
+                margin: EdgeInsets.only(bottom: 20),
+                child: Text(
+                  "Copyright @ 2021 Melodyyfi by MTRNM MUSIC",
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white
+                  ),
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class CameraApp extends StatefulWidget {
@@ -131,7 +208,7 @@ class _DisplayPictureState extends State<DisplayPicture> {
         child: Image.file(File(widget.imagePath)),
       ),
       floatingActionButton: FloatingActionButton(
-          child: Icon(Icons.upload),
+          child: Icon(Icons.upload_file),
           onPressed: () {
             Navigator.of(context).push(
                 MaterialPageRoute(
@@ -142,7 +219,6 @@ class _DisplayPictureState extends State<DisplayPicture> {
             );
           }
       ),
-
     );
   }
 }
