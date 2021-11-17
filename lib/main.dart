@@ -1,9 +1,12 @@
+import 'dart:ffi';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
 import 'package:google_ml_kit/google_ml_kit.dart';
-
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
 
 late List<CameraDescription> cameras;
 
@@ -29,8 +32,10 @@ class _CameraAppState extends State<CameraApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: "BloodTester",
       home: TakePicture(camera: cameras.first),
-      theme:ThemeData.dark()
+      theme:ThemeData.dark(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -51,6 +56,7 @@ class _TakePictureState extends State<TakePicture> {
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.landscapeRight]);
     controller = CameraController(cameras[0], ResolutionPreset.max);
     initializeControllerFuture = controller.initialize();
   }
@@ -150,8 +156,73 @@ class RecognizeText extends StatefulWidget {
   _RecognizeTextState createState() => _RecognizeTextState();
 }
 
+
+
 class _RecognizeTextState extends State<RecognizeText> {
   late List<String> foundLines;
+  //'WBCs': ["Possible causes: "
+  //         "An increased production of white blood cells to fight an infection. "
+  //         "A reaction to a drug that increases white blood cell production. "
+  //         "A disease of bone marrow, causing abnormally high production of white blood cells. "
+  //         "An immune system disorder that increases white blood cell production.",
+  //         "Possible causes: "
+  //         "Viral infections that temporarily disrupt the work of bone marrow. "
+  //         "Certain disorders present at birth (congenital) that involve diminished bone marrow function. "
+  //         "Autoimmune disorders that destroy white blood cells or bone marrow cells. "
+  //         "Severe infections that use up white blood cells faster than they can be produced. "
+  //         "Medications, such as antibiotics, that destroy white blood cells."],
+
+  String textresults = '';
+
+  var medItems = {
+    "White Blood Count": ['WBC', 'WBCs', 'White Blood Cells', 'White Blood Count', 'White Cell Count', 'White Blood Cell Count'],
+    "Neutrophils": ['Neutrophils'],
+    "Lymphocytes": ['Lymphocytes', 'Lymphs'],
+    "Monocytes": ['Monocytes'],
+    "Eosinophils": ['Eosinophils', 'Eos'],
+    "Basophils": ['Basophils', 'Basos'],
+    "Red Blood Count": ['RBC', 'RBCs', 'Red Blood Cells', 'Red Blood Count', 'Red Cell Count', 'Red Blood Cell Count'],
+    "Hemoglobin": ['Hemoglobin', 'Hb'],
+    "Hematocrit": ['Hematocrit'],
+    "Platelets": ['Platelets']
+  };
+
+  List<String> itemsNotFound = ["White Blood Count", "Neutrophils", "Lymphocytes", "Monocytes", "Eosinophils", "Basophils",
+    "Red Blood Count", "Hemoglobin", "Hematocrit", "Platelets"];
+
+  bool medItemFound(String item) {
+    for (String itemNotFound in itemsNotFound) {
+      for (String medItem in medItems[itemNotFound]!) {
+        if (item.contains(medItem)) {
+          itemsNotFound.remove(medItem);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  String returnValue(String item) {
+    RegExp valuePattern = RegExp(r"\d+(\.\d+)?");
+    RegExpMatch? foundPattern = valuePattern.firstMatch(item);
+    if (foundPattern == null) {
+      return "No result value found.";
+    }
+    int startPattern = foundPattern.start;
+    int endPattern = foundPattern.end;
+    return item.substring(startPattern, endPattern);
+  }
+
+  String returnRange(String item) {
+    RegExp valuePattern = RegExp(r"\d+(\.\d+)?(\sto\s|\s-\s|-)\d+(\.\d+)?");
+    RegExpMatch? foundPattern = valuePattern.firstMatch(item);
+    if (foundPattern == null) {
+      return "No range found.";
+    }
+    int startPattern = foundPattern.start;
+    int endPattern = foundPattern.end;
+    return item.substring(startPattern, endPattern);
+  }
 
   int getItemIndex(medItems, item) {
     int index = -1;
@@ -178,31 +249,39 @@ class _RecognizeTextState extends State<RecognizeText> {
             print(line.text);
           }
         }
-        var medItems = ["WBCs", "Neutophils", "Lymphocyles", "Monocytes", "Eosinophils", "Basophils", "RBCs", "Hb", "Hematocrit", "Platelets"];
+        //var medItems = ["WBCs", "Neutophils", "Lymphocyles", "Monocytes", "Eosinophils", "Basophils", "RBCs", "Hb", "Hematocrit", "Platelets"];
 
         List<String> newResultList = [];
 
         for(var item in textLinesList) {
-          if (getItemIndex(medItems, item) >= 0) {
+          if (medItemFound(item)) {
             print("Found an important item: " + item);
             try {
-              var pos = textLinesList.indexOf(item);
-              var result = double.parse(textLinesList[pos + 1]);
-              var reference = textLinesList[pos + 2];
-              var ranges = reference.split("to");
-              var min = double.parse(ranges[0]);
-              var max = double.parse(ranges[1]);
-              var decision = "Abnormal";
-              if (result >= min && result <= max) {
-                decision = "Normal";
-              }else if (result < min) {
-                decision = "Abnormally Low";
-              }else if (result > max) {
-                decision = "Abnormally High";
+              int pos = textLinesList.indexOf(item);
+              double result = double.parse(textLinesList[pos + 1]);
+              String reference = textLinesList[pos + 2];
+              if (returnRange(reference) != "No range found.") {
+                List<String> ranges = [];
+                if (reference.contains("to")) {
+                  ranges = reference.split("to");
+                } else if (reference.contains("-")) {
+                  ranges = reference.split("-");
+                }
+                double min = double.parse(ranges![0]);
+                double max = double.parse(ranges![1]);
+                String decision = "Abnormal";
+                if (result >= min && result <= max) {
+                  decision = "Normal";
+                } else if (result < min) {
+                  decision = "Abnormally Low";
+                } else if (result > max) {
+                  decision = "Abnormally High";
+                }
+                String newResultStr = item + ": " + decision;
+                print(newResultStr);
+                newResultList.add(newResultStr);
               }
-              var newResultStr = item + ": " + decision;
-              print(newResultStr);
-              newResultList.add(newResultStr);
+
             } catch (e) {
               print("Failed to parse the item");
             }
@@ -247,7 +326,18 @@ class _RecognizeTextState extends State<RecognizeText> {
             return const CircularProgressIndicator();
           }
         }
-      )
+      ),
+      floatingActionButton: FloatingActionButton(
+        child: Icon(Icons.save),
+        onPressed: () async {
+          final Directory? dir = await getExternalStorageDirectory();
+          final File file = File('${dir!.path}/results.txt');
+          String text =  foundLines.join('\n');
+          print(dir.path);
+          file.writeAsString(text);
+          Share.shareFiles(['${dir!.path}/results.txt']);
+        },
+      ),
     );
   }
 }
